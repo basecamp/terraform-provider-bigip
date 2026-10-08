@@ -16,6 +16,8 @@ on:
       - 'v*'
 jobs:
   goreleaser:
+    # GPG_PRIVATE_KEY/PASSPHRASE live only in this environment; it waits for a reviewer.
+    environment: release
     runs-on: ubuntu-latest
     steps:
       -
