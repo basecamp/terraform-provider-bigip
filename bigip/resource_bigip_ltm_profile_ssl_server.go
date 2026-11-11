@@ -87,6 +87,13 @@ func resourceBigipLtmProfileServerSsl() *schema.Resource {
 				Description: "Client certificate chain traversal depth.  Default 9.",
 			},
 
+			"authenticate_name": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				Description: "Name the server's certificate must carry in its Common Name or a Subject Alternative Name, checked when peer_cert_mode is require. none to not check it.",
+			},
+
 			"c3d_ca_cert": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -484,6 +491,7 @@ func resourceBigipLtmProfileServerSslRead(ctx context.Context, d *schema.Resourc
 	_ = d.Set("alert_timeout", obj.AlertTimeout)
 	_ = d.Set("authenticate", obj.Authenticate)
 	_ = d.Set("authenticate_depth", obj.AuthenticateDepth)
+	_ = d.Set("authenticate_name", obj.AuthenticateName)
 	_ = d.Set("c3d_ca_cert", obj.C3dCaCert)
 	_ = d.Set("c3d_ca_key", obj.C3dCaKey)
 	_ = d.Set("c3d_ca_passphrase", obj.C3dCaPassphrase)
@@ -624,6 +632,7 @@ func getServerSslConfig(d *schema.ResourceData, config *bigip.ServerSSLProfile) 
 	config.AlertTimeout = d.Get("alert_timeout").(string)
 	config.Authenticate = d.Get("authenticate").(string)
 	config.AuthenticateDepth = d.Get("authenticate_depth").(int)
+	config.AuthenticateName = d.Get("authenticate_name").(string)
 	config.C3dCaCert = c3dCaCert
 	config.C3dCaKey = c3dCaKey
 	config.C3dCaPassphrase = d.Get("c3d_ca_passphrase").(string)

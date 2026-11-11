@@ -47,6 +47,8 @@ resource "bigip_ltm_profile_server_ssl" "test-ServerSsl" {
 * `authenticate` - (Optional) Specifies the frequency of server authentication for an SSL session.When `once`,specifies that the system authenticates the server once for an SSL session.
 When `always`, specifies that the system authenticates the server once for an SSL session and also upon reuse of that session.
 
+* `authenticate_name` - (Optional) Specifies a name the server's certificate must carry, in its Common Name or a Subject Alternative Name, or the handshake fails. It is checked only when `peer_cert_mode` is `require`, so set `ca_file` too. Give one fully qualified name, such as `www.example.com`, not a wildcard pattern. `none`, the default, does not check the name.
+
 * `tm_options` - (Optional,type `list`) List of Enabled selection from a set of industry standard options for handling SSL processing.By default,
 Don't insert empty fragments and No TLSv1.3 are listed as Enabled Options. `Usage` : tm_options    = ["dont-insert-empty-fragments","no-tlsv1.3"]
 

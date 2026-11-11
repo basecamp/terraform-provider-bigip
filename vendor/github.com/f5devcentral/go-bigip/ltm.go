@@ -36,6 +36,7 @@ type ServerSSLProfile struct {
 	AlertTimeout                 string      `json:"alertTimeout,omitempty"`
 	Authenticate                 string      `json:"authenticate,omitempty"`
 	AuthenticateDepth            int         `json:"authenticateDepth,omitempty"`
+	AuthenticateName             string      `json:"authenticateName,omitempty"`
 	C3dCaCert                    string      `json:"c3dCaCert,omitempty"`
 	C3dCaKey                     string      `json:"c3dCaKey,omitempty"`
 	C3dCaPassphrase              string      `json:"c3dCaPassphrase,omitempty"`

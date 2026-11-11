@@ -39,6 +39,7 @@ func TestAccBigipLtmProfileServerSsl_Default_create(t *testing.T) {
 					resource.TestCheckResourceAttr(resFullName, "alert_timeout", "indefinite"),
 					resource.TestCheckResourceAttr(resFullName, "authenticate", "once"),
 					resource.TestCheckResourceAttr(resFullName, "authenticate_depth", "9"),
+					resource.TestCheckResourceAttr(resFullName, "authenticate_name", "none"),
 					resource.TestCheckResourceAttr(resFullName, "cache_size", "262144"),
 					resource.TestCheckResourceAttr(resFullName, "ca_file", "none"),
 					resource.TestCheckResourceAttr(resFullName, "cert", "/Common/default.crt"),
@@ -105,6 +106,45 @@ func TestAccBigipLtmProfileServerSsl_UpdateAuthenticate(t *testing.T) {
 					resource.TestCheckResourceAttr(resFullName, "authenticate", "always"),
 					resource.TestCheckResourceAttr(resFullName, "defaults_from", "/Common/serverssl"),
 				),
+			},
+		},
+	})
+}
+
+func TestAccBigipLtmProfileServerSsl_UpdateAuthenticateName(t *testing.T) {
+	t.Parallel()
+	var instName = "test-ServerSsl-UpdateAuthenticateName"
+	var instFullName = fmt.Sprintf("/%s/%s", TestPartition, instName)
+	resFullName := fmt.Sprintf("%s.%s", resNameserver, instName)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAcctPreCheck(t)
+		},
+		Providers:    testAccProviders,
+		CheckDestroy: testCheckServerSslDestroyed,
+		Steps: []resource.TestStep{
+			{
+				Config: testaccbigipltmprofileserversslDefaultcreate(instName),
+				Check: resource.ComposeTestCheckFunc(
+					testCheckServerSslExists(instFullName),
+					resource.TestCheckResourceAttr(resFullName, "authenticate_name", "none"),
+				),
+			},
+			{
+				Config: testAccBigipLtmProfileServerSsl_UpdateParam(instName, "authenticate_name"),
+				Check: resource.ComposeTestCheckFunc(
+					testCheckServerSslExists(instFullName),
+					resource.TestCheckResourceAttr(resFullName, "peer_cert_mode", "require"),
+					resource.TestCheckResourceAttr(resFullName, "ca_file", "/Common/ca-bundle.crt"),
+					resource.TestCheckResourceAttr(resFullName, "authenticate_name", "www.example.com"),
+				),
+			},
+			{
+				ResourceName:            resFullName,
+				ImportState:             true,
+				ImportStateId:           instFullName,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"passphrase", "c3d_ca_passphrase"},
 			},
 		},
 	})
@@ -261,6 +301,11 @@ func testAccBigipLtmProfileServerSsl_UpdateParam(instName, updateParam string) s
 	case "authenticate":
 		resPrefix = fmt.Sprintf(`%s
 			  authenticate = "always"`, resPrefix)
+	case "authenticate_name":
+		resPrefix = fmt.Sprintf(`%s
+			  peer_cert_mode = "require"
+			  ca_file = "/Common/ca-bundle.crt"
+			  authenticate_name = "www.example.com"`, resPrefix)
 	case "tm_options":
 		resPrefix = fmt.Sprintf(`%s
 			  tm_options = ["no-tlsv1.3"]`, resPrefix)
