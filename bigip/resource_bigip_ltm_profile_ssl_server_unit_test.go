@@ -1,3 +1,8 @@
+/*
+This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+*/
+
 package bigip
 
 import (
@@ -15,7 +20,7 @@ import (
 // authenticate_name goes to BIG-IP as authenticateName on create and on
 // update, and is read back into state from it, against a stand-in iControl
 // REST server that keeps the profile it was sent.
-func TestUnitBigipLtmProfileServerSslAuthenticateName(t *testing.T) {
+func TestAccBigipLtmProfileServerSslUnitAuthenticateName(t *testing.T) {
 	t.Setenv("TEEM_DISABLE", "true")
 
 	var mu sync.Mutex
@@ -85,9 +90,9 @@ resource "bigip_ltm_profile_server_ssl" "test" {
 		Providers:  testAccProviders,
 		Steps: []resource.TestStep{
 			{
-				Config: config("3.bc4-beta.com"),
+				Config: config("api.example.com"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("bigip_ltm_profile_server_ssl.test", "authenticate_name", "3.bc4-beta.com"),
+					resource.TestCheckResourceAttr("bigip_ltm_profile_server_ssl.test", "authenticate_name", "api.example.com"),
 					resource.TestCheckResourceAttr("bigip_ltm_profile_server_ssl.test", "peer_cert_mode", "require"),
 				),
 			},
@@ -98,5 +103,5 @@ resource "bigip_ltm_profile_server_ssl" "test" {
 		},
 	})
 
-	assert.Equal(t, []string{"3.bc4-beta.com", "www.example.com"}, sent)
+	assert.Equal(t, []string{"api.example.com", "www.example.com"}, sent)
 }

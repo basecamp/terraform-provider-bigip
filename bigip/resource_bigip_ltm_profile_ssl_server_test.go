@@ -127,13 +127,19 @@ func TestAccBigipLtmProfileServerSsl_UpdateAuthenticateName(t *testing.T) {
 				Config: testaccbigipltmprofileserversslDefaultcreate(instName),
 				Check: resource.ComposeTestCheckFunc(
 					testCheckServerSslExists(instFullName),
+					resource.TestCheckResourceAttr(resFullName, "name", instFullName),
+					resource.TestCheckResourceAttr(resFullName, "partition", "Common"),
 					resource.TestCheckResourceAttr(resFullName, "authenticate_name", "none"),
+					resource.TestCheckResourceAttr(resFullName, "defaults_from", "/Common/serverssl"),
 				),
 			},
 			{
 				Config: testAccBigipLtmProfileServerSsl_UpdateParam(instName, "authenticate_name"),
 				Check: resource.ComposeTestCheckFunc(
 					testCheckServerSslExists(instFullName),
+					resource.TestCheckResourceAttr(resFullName, "name", instFullName),
+					resource.TestCheckResourceAttr(resFullName, "partition", "Common"),
+					resource.TestCheckResourceAttr(resFullName, "defaults_from", "/Common/serverssl"),
 					resource.TestCheckResourceAttr(resFullName, "peer_cert_mode", "require"),
 					resource.TestCheckResourceAttr(resFullName, "ca_file", "/Common/ca-bundle.crt"),
 					resource.TestCheckResourceAttr(resFullName, "authenticate_name", "www.example.com"),
