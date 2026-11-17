@@ -152,15 +152,16 @@ func newMonitorTestClient(serverURL string) *bigip.BigIP {
 func TestResourceBigipLtmMonitorCreateSuccess(t *testing.T) {
 	mux := newMonitorTestMux(map[string]http.HandlerFunc{
 		"http": func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case "POST":
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = fmt.Fprint(w, `{"name":"test-http-monitor","fullPath":"/Common/test-http-monitor"}`)
-			default:
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = fmt.Fprint(w, `{"items":[{"name":"test-http-monitor","fullPath":"/Common/test-http-monitor","defaultsFrom":"/Common/http"}]}`)
-			}
+			assert.Equal(t, "POST", r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"name":"test-http-monitor","fullPath":"/Common/test-http-monitor"}`)
 		},
+	})
+	// the read that follows the create fetches the one monitor
+	mux.HandleFunc("/mgmt/tm/ltm/monitor/http/~Common~test-http-monitor", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"name":"test-http-monitor","fullPath":"/Common/test-http-monitor","defaultsFrom":"/Common/http"}`)
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -202,15 +203,16 @@ func TestResourceBigipLtmMonitorCreateError(t *testing.T) {
 func TestResourceBigipLtmMonitorCreateGatewayICMP(t *testing.T) {
 	mux := newMonitorTestMux(map[string]http.HandlerFunc{
 		"gateway-icmp": func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case "POST":
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = fmt.Fprint(w, `{"name":"test-gw-monitor","fullPath":"/Common/test-gw-monitor"}`)
-			default:
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = fmt.Fprint(w, `{"items":[{"name":"test-gw-monitor","fullPath":"/Common/test-gw-monitor","defaultsFrom":"/Common/gateway_icmp"}]}`)
-			}
+			assert.Equal(t, "POST", r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"name":"test-gw-monitor","fullPath":"/Common/test-gw-monitor"}`)
 		},
+	})
+	// the read that follows the create fetches the one monitor
+	mux.HandleFunc("/mgmt/tm/ltm/monitor/gateway-icmp/~Common~test-gw-monitor", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"name":"test-gw-monitor","fullPath":"/Common/test-gw-monitor","defaultsFrom":"/Common/gateway_icmp"}`)
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -228,15 +230,16 @@ func TestResourceBigipLtmMonitorCreateGatewayICMP(t *testing.T) {
 func TestResourceBigipLtmMonitorCreateTCPHalfOpen(t *testing.T) {
 	mux := newMonitorTestMux(map[string]http.HandlerFunc{
 		"tcp-half-open": func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case "POST":
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = fmt.Fprint(w, `{"name":"test-tcpho-monitor","fullPath":"/Common/test-tcpho-monitor"}`)
-			default:
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = fmt.Fprint(w, `{"items":[{"name":"test-tcpho-monitor","fullPath":"/Common/test-tcpho-monitor","defaultsFrom":"/Common/tcp_half_open"}]}`)
-			}
+			assert.Equal(t, "POST", r.Method)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"name":"test-tcpho-monitor","fullPath":"/Common/test-tcpho-monitor"}`)
 		},
+	})
+	// the read that follows the create fetches the one monitor
+	mux.HandleFunc("/mgmt/tm/ltm/monitor/tcp-half-open/~Common~test-tcpho-monitor", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"name":"test-tcpho-monitor","fullPath":"/Common/test-tcpho-monitor","defaultsFrom":"/Common/tcp_half_open"}`)
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -252,11 +255,10 @@ func TestResourceBigipLtmMonitorCreateTCPHalfOpen(t *testing.T) {
 }
 
 func TestResourceBigipLtmMonitorReadSuccess(t *testing.T) {
-	mux := newMonitorTestMux(map[string]http.HandlerFunc{
-		"https": func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprint(w, `{"items":[{"name":"test-https-monitor","fullPath":"/Common/test-https-monitor","defaultsFrom":"/Common/https","sslProfile":"clientssl","compatibility":"enabled"}]}`)
-		},
+	mux := newMonitorTestMux()
+	mux.HandleFunc("/mgmt/tm/ltm/monitor/https/~Common~test-https-monitor", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"name":"test-https-monitor","fullPath":"/Common/test-https-monitor","defaultsFrom":"/Common/https","sslProfile":"clientssl","compatibility":"enabled"}`)
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -274,12 +276,12 @@ func TestResourceBigipLtmMonitorReadSuccess(t *testing.T) {
 	assert.Equal(t, "enabled", d.Get("compatibility"))
 }
 
-func TestResourceBigipLtmMonitorReadNotFoundInList(t *testing.T) {
-	mux := newMonitorTestMux(map[string]http.HandlerFunc{
-		"http": func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprint(w, `{"items":[{"name":"other-monitor","fullPath":"/Common/other-monitor","defaultsFrom":"/Common/http"}]}`)
-		},
+func TestResourceBigipLtmMonitorReadNotFound(t *testing.T) {
+	mux := newMonitorTestMux()
+	mux.HandleFunc("/mgmt/tm/ltm/monitor/http/~Common~missing-monitor", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = fmt.Fprint(w, `{"code":404,"message":"01020036:3: The requested monitor (/Common/missing-monitor) was not found.","errorStack":[],"apiError":3}`)
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -298,7 +300,7 @@ func TestResourceBigipLtmMonitorReadNotFoundInList(t *testing.T) {
 
 func TestResourceBigipLtmMonitorReadError(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/mgmt/tm/ltm/monitor/http", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/mgmt/tm/ltm/monitor/http/~Common~test-http-monitor", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	})
 	server := httptest.NewServer(mux)
@@ -316,15 +318,16 @@ func TestResourceBigipLtmMonitorReadError(t *testing.T) {
 }
 
 func TestResourceBigipLtmMonitorUpdateSuccess(t *testing.T) {
-	mux := newMonitorTestMux(map[string]http.HandlerFunc{
-		"http": func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprint(w, `{"items":[{"name":"test-http-monitor","fullPath":"/Common/test-http-monitor","defaultsFrom":"/Common/http"}]}`)
-		},
-	})
+	var methods []string
+	mux := newMonitorTestMux()
 	mux.HandleFunc("/mgmt/tm/ltm/monitor/http/~Common~test-http-monitor", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "PUT", r.Method)
+		methods = append(methods, r.Method)
 		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" {
+			// the read that follows the update fetches the one monitor
+			_, _ = fmt.Fprint(w, `{"name":"test-http-monitor","fullPath":"/Common/test-http-monitor","defaultsFrom":"/Common/http"}`)
+			return
+		}
 		_, _ = fmt.Fprint(w, `{"name":"test-http-monitor","fullPath":"/Common/test-http-monitor"}`)
 	})
 	server := httptest.NewServer(mux)
@@ -339,6 +342,7 @@ func TestResourceBigipLtmMonitorUpdateSuccess(t *testing.T) {
 
 	diags := resourceBigipLtmMonitorUpdate(context.Background(), d, client)
 	require.False(t, diags.HasError(), "unexpected error: %v", diags)
+	assert.Equal(t, []string{"PUT", "GET"}, methods)
 }
 
 func TestResourceBigipLtmMonitorUpdateError(t *testing.T) {
@@ -361,15 +365,16 @@ func TestResourceBigipLtmMonitorUpdateError(t *testing.T) {
 }
 
 func TestResourceBigipLtmMonitorUpdateGatewayICMP(t *testing.T) {
-	mux := newMonitorTestMux(map[string]http.HandlerFunc{
-		"gateway-icmp": func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprint(w, `{"items":[{"name":"test-gw-monitor","fullPath":"/Common/test-gw-monitor","defaultsFrom":"/Common/gateway_icmp"}]}`)
-		},
-	})
+	var methods []string
+	mux := newMonitorTestMux()
 	mux.HandleFunc("/mgmt/tm/ltm/monitor/gateway-icmp/~Common~test-gw-monitor", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "PUT", r.Method)
+		methods = append(methods, r.Method)
 		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" {
+			// the read that follows the update fetches the one monitor
+			_, _ = fmt.Fprint(w, `{"name":"test-gw-monitor","fullPath":"/Common/test-gw-monitor","defaultsFrom":"/Common/gateway_icmp"}`)
+			return
+		}
 		_, _ = fmt.Fprint(w, `{"name":"test-gw-monitor","fullPath":"/Common/test-gw-monitor"}`)
 	})
 	server := httptest.NewServer(mux)
@@ -384,6 +389,7 @@ func TestResourceBigipLtmMonitorUpdateGatewayICMP(t *testing.T) {
 
 	diags := resourceBigipLtmMonitorUpdate(context.Background(), d, client)
 	require.False(t, diags.HasError(), "unexpected error: %v", diags)
+	assert.Equal(t, []string{"PUT", "GET"}, methods)
 }
 
 func TestResourceBigipLtmMonitorDeleteSuccess(t *testing.T) {

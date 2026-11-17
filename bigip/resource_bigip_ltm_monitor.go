@@ -8,6 +8,7 @@ package bigip
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
@@ -269,10 +270,36 @@ func resourceBigipLtmMonitorRead(ctx context.Context, d *schema.ResourceData, me
 
 	log.Printf("[INFO] Reading LTM Monitor: %+v", name)
 
-	parentMonitor := d.Get("parent").(string)
-	re := regexp.MustCompile("/.*/https$")
-	matchresult := re.MatchString(parentMonitor)
+	parent := d.Get("parent").(string)
+	if parent == "" {
+		// Only an import has no parent in state. The type is unknown, so
+		// this one read looks the monitor up in the list of all monitors.
+		return resourceBigipLtmMonitorImportRead(d, client, name)
+	}
 
+	// Read the one monitor by type and name. A refresh never lists monitors:
+	// that is 13 requests, each returning every monitor of one type.
+	monitorType, ok := ltmMonitorType(parent)
+	if !ok {
+		return diag.FromErr(fmt.Errorf("LTM Monitor %s has parent %s in state, which is not a built-in monitor type, so the monitor's type is unknown and it cannot be read. In configuration, parent takes the built-in type and custom_parent the monitor inherited from", name, parent))
+	}
+	m, found, err := getLtmMonitorByType(client, name, monitorType)
+	if err != nil {
+		log.Printf("[ERROR] Unable to retrieve Monitor (%s) (%v) ", name, err)
+		return diag.FromErr(err)
+	}
+	if !found {
+		return diag.FromErr(fmt.Errorf("Couldn't find LTM Monitor %s ", name))
+	}
+	if m.FullPath != name {
+		return diag.FromErr(fmt.Errorf("reading LTM Monitor %s as type %s returned %q instead", name, monitorType, m.FullPath))
+	}
+	return setLtmMonitorState(d, name, m)
+}
+
+// resourceBigipLtmMonitorImportRead reads a monitor whose type is not known
+// yet by looking for its full path in the list of all monitors.
+func resourceBigipLtmMonitorImportRead(d *schema.ResourceData, client *bigip.BigIP, name string) diag.Diagnostics {
 	monitors, err := client.Monitors()
 	if err != nil {
 		log.Printf("[ERROR] Unable to retrieve Monitor (%s) (%v) ", name, err)
@@ -283,53 +310,104 @@ func resourceBigipLtmMonitorRead(ctx context.Context, d *schema.ResourceData, me
 		d.SetId("")
 		return nil
 	}
-	for _, m := range monitors {
-		if m.FullPath == name {
-			_ = d.Set("interval", m.Interval)
-			_ = d.Set("up_interval", m.UpInterval)
-			_ = d.Set("timeout", m.Timeout)
-			if err := d.Set("send", m.SendString); err != nil {
-				return diag.FromErr(fmt.Errorf("[DEBUG] Error saving SendString to state for Monitor (%s): %s", d.Id(), err))
-			}
-			if err := d.Set("receive", m.ReceiveString); err != nil {
-				return diag.FromErr(fmt.Errorf("[DEBUG] Error saving ReceiveString to state for Monitor (%s): %s", d.Id(), err))
-			}
-			_ = d.Set("receive_disable", m.ReceiveDisable)
-			_ = d.Set("reverse", m.Reverse)
-			_ = d.Set("transparent", m.Transparent)
-			_ = d.Set("ip_dscp", m.IPDSCP)
-			if _, ok := d.GetOk("custom_parent"); ok {
-				_ = d.Set("custom_parent", m.ParentMonitor)
-			} else {
-				_ = d.Set("parent", m.ParentMonitor)
-			}
-			_ = d.Set("time_until_up", m.TimeUntilUp)
-			_ = d.Set("manual_resume", m.ManualResume)
-			_ = d.Set("destination", m.Destination)
-			if matchresult {
-				_ = d.Set("compatibility", m.Compatibility)
-				_ = d.Set("ssl_profile", m.SSLProfile)
-			} else {
-				_ = d.Set("compatibility", d.Get("compatibility").(string))
-			}
-			_ = d.Set("filename", m.Filename)
-			_ = d.Set("mode", m.Mode)
-			_ = d.Set("adaptive", m.Adaptive)
-			_ = d.Set("adaptive_limit", m.AdaptiveLimit)
-			_ = d.Set("username", m.Username)
-			_ = d.Set("password", m.Password)
-			_ = d.Set("name", name)
-			_ = d.Set("database", m.Database)
-
-			_ = d.Set("base", m.Base)
-			_ = d.Set("filter", m.Filter)
-			_ = d.Set("mandatory_attributes", m.MandatoryAttributes)
-			_ = d.Set("chase_referrals", m.ChaseReferrals)
-			_ = d.Set("security", m.Security)
-			return nil
+	for i := range monitors {
+		if monitors[i].FullPath == name {
+			return setLtmMonitorState(d, name, &monitors[i])
 		}
 	}
 	return diag.FromErr(fmt.Errorf("Couldn't find LTM Monitor %s ", name))
+}
+
+// getLtmMonitorByType reads one monitor with a single request,
+// GET /mgmt/tm/ltm/monitor/<type>/<name>. found is false, with no error, only
+// when the BIG-IP answers 404.
+//
+// It calls APICall itself instead of client.GetMonitor because GetMonitor
+// returns just the message of a failed request: APICall also returns the
+// response body, which carries the status code.
+func getLtmMonitorByType(client *bigip.BigIP, name, monitorType string) (m *bigip.Monitor, found bool, err error) {
+	resp, err := client.APICall(&bigip.APIRequest{
+		Method:      "get",
+		URL:         strings.Join([]string{"ltm", "monitor", monitorType, strings.ReplaceAll(name, "/", "~")}, "/"),
+		ContentType: "application/json",
+	})
+	// A failed request is answered with {"code": <status>, "message": ...};
+	// a monitor has no code. APICall reports no error for a failure without
+	// a message, so look at the code first.
+	var reqError bigip.RequestError
+	if json.Unmarshal(resp, &reqError) == nil && reqError.Code == 404 {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if reqError.Code >= 400 {
+		return nil, false, fmt.Errorf("reading LTM Monitor %s as type %s failed with code %d", name, monitorType, reqError.Code)
+	}
+	var monitor bigip.Monitor
+	if err := json.Unmarshal(resp, &monitor); err != nil {
+		return nil, false, err
+	}
+	return &monitor, true, nil
+}
+
+// ltmMonitorType returns the monitor type as it appears in the REST path
+// (/mgmt/tm/ltm/monitor/<type>) for a built-in parent monitor such as
+// /Common/http. ok is false when the parent is not one of the built-in types.
+func ltmMonitorType(parent string) (monitorType string, ok bool) {
+	if !parentMonitors[parent] {
+		return "", false
+	}
+	return strings.ReplaceAll(monitorParent(parent), "_", "-"), true
+}
+
+func setLtmMonitorState(d *schema.ResourceData, name string, m *bigip.Monitor) diag.Diagnostics {
+	parentMonitor := d.Get("parent").(string)
+	re := regexp.MustCompile("/.*/https$")
+	matchresult := re.MatchString(parentMonitor)
+
+	_ = d.Set("interval", m.Interval)
+	_ = d.Set("up_interval", m.UpInterval)
+	_ = d.Set("timeout", m.Timeout)
+	if err := d.Set("send", m.SendString); err != nil {
+		return diag.FromErr(fmt.Errorf("[DEBUG] Error saving SendString to state for Monitor (%s): %s", d.Id(), err))
+	}
+	if err := d.Set("receive", m.ReceiveString); err != nil {
+		return diag.FromErr(fmt.Errorf("[DEBUG] Error saving ReceiveString to state for Monitor (%s): %s", d.Id(), err))
+	}
+	_ = d.Set("receive_disable", m.ReceiveDisable)
+	_ = d.Set("reverse", m.Reverse)
+	_ = d.Set("transparent", m.Transparent)
+	_ = d.Set("ip_dscp", m.IPDSCP)
+	if _, ok := d.GetOk("custom_parent"); ok {
+		_ = d.Set("custom_parent", m.ParentMonitor)
+	} else {
+		_ = d.Set("parent", m.ParentMonitor)
+	}
+	_ = d.Set("time_until_up", m.TimeUntilUp)
+	_ = d.Set("manual_resume", m.ManualResume)
+	_ = d.Set("destination", m.Destination)
+	if matchresult {
+		_ = d.Set("compatibility", m.Compatibility)
+		_ = d.Set("ssl_profile", m.SSLProfile)
+	} else {
+		_ = d.Set("compatibility", d.Get("compatibility").(string))
+	}
+	_ = d.Set("filename", m.Filename)
+	_ = d.Set("mode", m.Mode)
+	_ = d.Set("adaptive", m.Adaptive)
+	_ = d.Set("adaptive_limit", m.AdaptiveLimit)
+	_ = d.Set("username", m.Username)
+	_ = d.Set("password", m.Password)
+	_ = d.Set("name", name)
+	_ = d.Set("database", m.Database)
+
+	_ = d.Set("base", m.Base)
+	_ = d.Set("filter", m.Filter)
+	_ = d.Set("mandatory_attributes", m.MandatoryAttributes)
+	_ = d.Set("chase_referrals", m.ChaseReferrals)
+	_ = d.Set("security", m.Security)
+	return nil
 }
 
 func resourceBigipLtmMonitorUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
