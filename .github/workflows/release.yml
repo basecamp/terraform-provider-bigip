@@ -17,6 +17,8 @@ on:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # goreleaser creates the draft release and uploads the signed assets
     steps:
       -
         name: Checkout
