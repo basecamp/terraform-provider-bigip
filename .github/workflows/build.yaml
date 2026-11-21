@@ -7,9 +7,13 @@ on:
       - '**.go'
       - 'vendor/**'
       - '.github/workflows/**'
+permissions: {}
+
 jobs:
   gobuild:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: true
       matrix:
